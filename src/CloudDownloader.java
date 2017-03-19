@@ -1,11 +1,13 @@
 
 import java.io.BufferedReader;
+import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
+import java.net.Socket;
 import java.net.URL;
 import java.util.Base64;
 import java.util.Scanner;
@@ -13,70 +15,76 @@ import java.util.Scanner;
 public class CloudDownloader
 {
 
-	public static void main(String[] args) throws IOException
+	public static void main(String[] args) throws Exception
 	{
-		String urlString = "http://"+args[0];
 		String authString = args[1];
 		String asB64 = Base64.getEncoder().encodeToString(authString.getBytes());
-		URL url = new URL(urlString);
-		HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-		connection.setRequestMethod("GET");
-		connection.setRequestProperty("Authorization", "Basic " + asB64);
-		int responseCode = connection.getResponseCode();
-		if(responseCode!=200){
-			System.out.println("Response Code : " + responseCode);
+		Socket clientSocket = GET(args[0],asB64,0,0,false);
+		BufferedReader inFromServer = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+		String answer = inFromServer.readLine();
+		if(!answer.contains("200")){
+			System.out.println("Error! \nResponse Code : " + answer);
 			return;
 		}
-		BufferedReader in = new BufferedReader(new InputStreamReader(connection.getInputStream()));
-		String inputLine;
-		StringBuffer response = new StringBuffer();
-		File file=null;
-		FileOutputStream fos=null;
-		int totalBytes=0;
-		Boolean finished = false;
-		
-		if((inputLine = in.readLine()) != null)
-			file = new File(inputLine);
-		if((inputLine = in.readLine()) != null)
-			totalBytes = Integer.parseInt(inputLine);
-		
-		int byteCounter=0;
-		fos = new FileOutputStream(file);
-		while(!finished){
-			String urlString2 = "http://"+in.readLine();
-			String asB642 = Base64.getEncoder().encodeToString(in.readLine().getBytes());
-			Scanner s = new Scanner(in.readLine());
-			s.useDelimiter("-");
-			int bytesFrom = s.nextInt();
-			int bytesTo = s.nextInt();
-			URL url2 = new URL(urlString2);
-			HttpURLConnection connection2 = (HttpURLConnection) url2.openConnection();
-			connection2.setRequestMethod("GET");
-			connection2.setRequestProperty("Authorization", "Basic " + asB642);
-			connection2.setRequestProperty("Range", "Bytes="+byteCounter+1+"-"+bytesTo);
-			int responseCode2 = connection.getResponseCode();
-			if(responseCode2!=200){
-				System.out.println("Response Code 2 : " + responseCode2);
-				return;
+		while((answer = inFromServer.readLine())!=null){
+			if(answer.contains("Content-Type:")){
+				answer = inFromServer.readLine();
+				break;
 			}
+		}
+		String fileName = inFromServer.readLine();
+		File file= new File(fileName);
+		FileOutputStream fos = new FileOutputStream(file);
+		int totalBytes=Integer.parseInt(inFromServer.readLine());
+		Boolean finished = false;
+		int byteCounter=0;
+		Socket tempSocket = null;
+		String inputLine;
+		while(!finished){
+			String urlString2 = inFromServer.readLine();
+			//System.out.println("ANAAAAN "+urlString2);
+			String asB642 = Base64.getEncoder().encodeToString(inFromServer.readLine().getBytes());
+			int bytesTo = Integer.parseInt(inFromServer.readLine().split("-")[1]);
+			System.out.println("\n BytesFrom: " + (byteCounter+1) + " BytesTo: " + bytesTo + "\n");
+			tempSocket = GET(urlString2,asB642,byteCounter+1,bytesTo,true);
+			BufferedReader tempReader = new BufferedReader(new InputStreamReader(tempSocket.getInputStream()));
+			String tempAnswer = tempReader.readLine();
+			if(!tempAnswer.contains("200")){
+				//System.out.println("Response Code : " + tempAnswer);
+			}
+			System.out.println("Writing the bytes from "+(byteCounter+1)+" to "+bytesTo);
 			byteCounter = bytesTo;
-			InputStream inputStream = connection2.getInputStream();
-			int data = inputStream.read();
-			while(data != -1) {
-				  //do something with data...
-				  fos.write(data);
-				  data = inputStream.read();
-				}
-			inputStream.close();
+			while((tempAnswer = tempReader.readLine())!=null){
+				System.out.println(tempAnswer);
+			}
+//			InputStream inputStream = tempSocket.getInputStream();
+//			int data = inputStream.read();
+//			
+//			while(data != -1) {
+//				  //do something with data...
+//				  fos.write(data);
+//				  data = inputStream.read();
+//				}
+//			inputStream.close();
 			if(byteCounter==totalBytes)
 				finished = true;
 		}
 		fos.close();
-		while ((inputLine = in.readLine()) != null) {
-			response.append(inputLine+	"\n");
-		}
-		in.close();
-		System.out.println("Done");
+		clientSocket.close();
+		return;
 	}
-
+	private static Socket GET(String URL, String auth, int lowerBound, int upperBound, Boolean boundCheck) throws Exception{
+		String IP = URL.split("/")[0];
+		String FileName = URL.split("/")[1];
+		Socket clientSocket = new Socket(IP, 80);
+		
+		DataOutputStream outToServer = new DataOutputStream(clientSocket.getOutputStream());
+		outToServer.writeBytes("GET /"+FileName+" HTTP/1.1\n");
+		outToServer.writeBytes("Host: "+IP+"\n");
+		outToServer.writeBytes("Authorization: basic " + auth+"\n");
+		if(boundCheck)
+			outToServer.writeBytes("Range: bytes=" + lowerBound +"-" +upperBound +"\n");
+		outToServer.writeBytes("\r\n");
+		return clientSocket;
+	}
 }
