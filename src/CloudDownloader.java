@@ -6,6 +6,7 @@ import java.io.FileOutputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.net.Socket;
+import java.util.ArrayList;
 import java.util.Base64;
 
 public class CloudDownloader
@@ -40,42 +41,32 @@ public class CloudDownloader
 		System.out.println("File size is " + totalBytes + " Bytes");
 
 		int maxServerNumber = 10;
-		String[] urlString = new String[maxServerNumber];
-		String[] auth = new String[maxServerNumber];
-		int[] bytesFrom = new int[maxServerNumber];
-		int[] bytesTo = new int[maxServerNumber];
-		int i = 0;
+		ArrayList<String> urlString = new ArrayList<>(); 
+		ArrayList<String> auth = new ArrayList<>();
+		ArrayList<Integer> bytesFrom = new ArrayList<>();
+		ArrayList<Integer> bytesTo = new ArrayList<>();
+		int fileCounter = 0;
 		while(true){
-			urlString[i] = inFromServer.readLine();
-			auth[i] = Base64.getEncoder().encodeToString(inFromServer.readLine().getBytes());
+			urlString.add(inFromServer.readLine());
+			auth.add(Base64.getEncoder().encodeToString(inFromServer.readLine().getBytes()));
 			String[] str = inFromServer.readLine().split("-");
-			bytesFrom[i] = Integer.parseInt(str[0]);
-			bytesTo[i] = Integer.parseInt(str[1]);
+			bytesFrom.add(Integer.parseInt(str[0]));
+			bytesTo.add(Integer.parseInt(str[1]));
 			
-			if(bytesTo[i]==totalBytes)
+			if(bytesTo.get(fileCounter)==totalBytes)
 				break;
-			i++;
+			fileCounter++;
 		}
-		i = 0;
 		System.out.println("Index file is downloaded");
-		boolean finished = false;
-		while(true){
-			if(bytesFrom[i]!=0)
-				i++;
-			
-			break;
-		}
-		System.out.println("There are " + (i+1) + " servers in the index");
-		i=0;
-
-		while(!finished){
-			tempSocket = GET(urlString[i],auth[i],byteCounter+1-bytesFrom[i],bytesTo[i],true);
-			System.out.println("Connected to " + urlString[i]);
+		System.out.println("There are " + (fileCounter+1) + " servers in the index");
+		for (int i=0;i<=fileCounter;i++){
+			tempSocket = GET(urlString.get(i),auth.get(i),byteCounter+1-bytesFrom.get(i),bytesTo.get(i),true);
+			System.out.println("Connected to " + urlString.get(i));
 			BufferedReader tempReader = new BufferedReader(new InputStreamReader(tempSocket.getInputStream()));
 			String tempAnswer = tempReader.readLine();
 			while((tempAnswer = tempReader.readLine())!=null){
 				if(tempAnswer.contains("Content-Type:")){
-					tempReader.read();
+					tempReader.readLine();
 					break;
 				}
 			}			
@@ -84,11 +75,9 @@ public class CloudDownloader
 				fos.write(bite);
 				bite = tempReader.read();
 			}	
-			System.out.println("Downloaded bytes "+(byteCounter+1)+" to "+bytesTo[i] + " (size = " + (bytesTo[i]-(byteCounter)) + ")");
-			byteCounter = bytesTo[i];
-			i++;
+			System.out.println("Downloaded bytes "+(byteCounter+1)+" to "+bytesTo.get(i) + " (size = " + (bytesTo.get(i)-(byteCounter)) + ")");
+			byteCounter = bytesTo.get(i);
 			if(byteCounter==totalBytes){
-				finished = true;
 				System.out.println("Download of the file is complete (size = " + totalBytes + ")");
 			}
 		}
