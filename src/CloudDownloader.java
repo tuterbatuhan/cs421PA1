@@ -1,9 +1,10 @@
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
-import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import java.net.Socket;
 import java.util.Base64;
 
@@ -30,16 +31,15 @@ public class CloudDownloader
 		String fileName = inFromServer.readLine();
 		File file= new File(fileName);
 		FileOutputStream fos = new FileOutputStream(file);
+		BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(fos));	
 		int totalBytes=Integer.parseInt(inFromServer.readLine());
 		int byteCounter=0;
 		Socket tempSocket = null;
-		String inputLine;
 		
 		System.out.println("URL of the index file: " + args[0]);
 		System.out.println("File size is " + totalBytes + " Bytes");
 
-		//baþtan indexteki her deðeri bi kaydediyorum. sýrf "There are 2 servers in the index" yazýsýný istediði için.
-		int maxServerNumber = 10;//2den fazla olursa diye 10 dedim garanti olsun diye. daha az rastgele biþey de yapabiliriz
+		int maxServerNumber = 10;
 		String[] urlString = new String[maxServerNumber];
 		String[] auth = new String[maxServerNumber];
 		int[] bytesFrom = new int[maxServerNumber];
@@ -69,37 +69,21 @@ public class CloudDownloader
 		i=0;
 
 		while(!finished){
-			tempSocket = GET(urlString[i],auth[i],byteCounter+2-bytesFrom[i],bytesTo[i],true);
+			tempSocket = GET(urlString[i],auth[i],byteCounter+1-bytesFrom[i],bytesTo[i],true);
 			System.out.println("Connected to " + urlString[i]);
 			BufferedReader tempReader = new BufferedReader(new InputStreamReader(tempSocket.getInputStream()));
 			String tempAnswer = tempReader.readLine();
-			if(!tempAnswer.contains("200")){
-				//System.out.println("Response Code : " + tempAnswer);
-			}
-			
 			while((tempAnswer = tempReader.readLine())!=null){
 				if(tempAnswer.contains("Content-Type:")){
-					answer = tempReader.readLine();
+					tempReader.read();
 					break;
 				}
-			}
-			
-			InputStream inputStream = tempSocket.getInputStream();
-			int data = inputStream.read();
-			
-			
-			//---------yapýlacak------------
-/*			while(data != -1) {
-				  //do something with data...
-				  fos.write(data);
-				  data = inputStream.read();
-				}
-			inputStream.close();	*/
-			while((tempAnswer = tempReader.readLine())!=null){
-				System.out.println(tempAnswer);
-			}
-			//-------------------------------
-			
+			}			
+			int bite = tempReader.read();
+			while(bite != -1){
+				fos.write(bite);
+				bite = tempReader.read();
+			}	
 			System.out.println("Downloaded bytes "+(byteCounter+1)+" to "+bytesTo[i] + " (size = " + (bytesTo[i]-(byteCounter)) + ")");
 			byteCounter = bytesTo[i];
 			i++;
@@ -108,6 +92,7 @@ public class CloudDownloader
 				System.out.println("Download of the file is complete (size = " + totalBytes + ")");
 			}
 		}
+		bw.close();
 		fos.close();
 		clientSocket.close();
 		return;
@@ -116,7 +101,6 @@ public class CloudDownloader
 		String IP = URL.split("/")[0];
 		String FileName = URL.split("/")[1];
 		Socket clientSocket = new Socket(IP, 80);
-		
 		DataOutputStream outToServer = new DataOutputStream(clientSocket.getOutputStream());
 		outToServer.writeBytes("GET /"+FileName+" HTTP/1.1\n");
 		outToServer.writeBytes("Host: "+IP+"\n");
