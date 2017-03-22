@@ -39,8 +39,7 @@ public class CloudDownloader
 		
 		System.out.println("URL of the index file: " + args[0]);
 		System.out.println("File size is " + totalBytes + " Bytes");
-
-		int maxServerNumber = 10;
+		
 		ArrayList<String> urlString = new ArrayList<>(); 
 		ArrayList<String> auth = new ArrayList<>();
 		ArrayList<Integer> bytesFrom = new ArrayList<>();
